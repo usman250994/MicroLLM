@@ -102,7 +102,7 @@ See [`locally_trained_model_for_rag pipeline.py`](./locally_trained_model_for_ra
 	 ```
 4. Run the script:
 	 ```sh
-  python rag_pipeline_with_openapi.py
+   python rag_pipeline_with_openapi.py
 	 ```
 
 ---
