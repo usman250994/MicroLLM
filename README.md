@@ -1,124 +1,69 @@
+# MicroLLM
 
+RAG from first principles in about 110 lines of Python: embed, search, answer. A teaching prototype, not a service.
 
-# My First Micro LLM: Step-by-Step Guide
+Two small scripts show the same retrieval idea two ways. One uses OpenAI and LangChain. The other runs entirely on your machine.
 
-> This project demonstrates two ways to build a Retrieval-Augmented Generation (RAG) system in Python:
-> 1. **With OpenAI & LangChain** (using `rag_pipeline_with_openapi.py`)
-> 2. **Fully Local & Free** (using `locally_trained_model_for_rag pipeline.py`)
+## What it shows
 
----
+- **Embeddings and vector search, in memory.** Documents are embedded and searched with nothing persisted: Chroma in one script, a FAISS flat index in the other.
+- **A hosted RAG chain.** `rag_pipeline_with_openapi.py` (35 lines) wires OpenAI embeddings, a Chroma retriever and `gpt-3.5-turbo` together with LangChain's `RetrievalQA`.
+- **A fully local variant.** `locally_trained_model_for_rag pipeline.py` (78 lines) uses `all-MiniLM-L6-v2` from SentenceTransformers for embeddings and FAISS for search. It needs no API key.
+- **Retrieval feeding a model.** In the local script the model is a small scikit-learn MLP sentiment classifier (TF-IDF features) that labels whatever was retrieved. It is a stand-in for an LLM, to keep the example free and offline.
 
-## 🧩 RAG System: High-Level Flow
+## Pipeline
 
 ```mermaid
-flowchart TD
-	Q[User Query] -->|Embed| E[Embeddings]
-	E -->|Vector Search| V[Vector DB]
-	V -->|Retrieve| D[Relevant Docs]
-	D -->|Augment| L[LLM or Classifier]
-	L -->|Answer| A[Final Output]
+flowchart LR
+    Q["Query"] --> E["Embed query"]
+    D["Documents"] --> I["Embed and index"]
+    I --> S["Vector search"]
+    E --> S
+    S --> T["Top-k documents"]
+    T --> M["Model: GPT (OpenAI script) or MLP classifier (local script)"]
+    M --> A["Answer or labels"]
 ```
 
-This diagram shows the generic flow for Retrieval-Augmented Generation (RAG):
+## Run it
 
-- **User Query** is embedded into a vector.
-- **Vector DB** is searched for similar documents.
-- **Relevant Docs** are retrieved and used to augment the answer.
-- **LLM or Classifier** generates the final output.
+Python 3.9+. There is no `requirements.txt`, so install what the script imports.
 
----
+Local script (no key needed; downloads the embedding model on first run):
 
-doc_embeddings = embedder.encode(docs)
+```sh
+pip install numpy faiss-cpu scikit-learn sentence-transformers
+python "locally_trained_model_for_rag pipeline.py"
+```
 
-## 🌐 Approach 1: RAG Pipeline with OpenAI & LangChain
+It prints the classifier's accuracy, then the two documents closest to the query "Was the movie good or bad?" with a Positive/Negative label each.
 
+OpenAI script (needs your own key, in a `.env` file that `.gitignore` already excludes):
 
+```sh
+pip install python-dotenv langchain langchain-community langchain-openai chromadb
+echo 'OPENAI_API_KEY=<your-key>' > .env
+python rag_pipeline_with_openapi.py
+```
 
-This is the main, beginner-friendly approach using OpenAI's LLMs and [LangChain](https://python.langchain.com/) for orchestration. See [`rag_pipeline_with_openapi.py`](./rag_pipeline_with_openapi.py) for the code.
+The OpenAI script is not pinned to library versions and uses LangChain's older `RetrievalQA` API, so on a recent LangChain it may need small import changes. The local classifier trains on six sentences, so its labels are illustrative: the point is the plumbing, not the accuracy.
 
-**Key Steps:**
+## What it leaves out
 
-1. **Environment Setup:** Load your OpenAI API key from a `.env` file.
-2. **Document Preparation:** Wrap your text data as `Document` objects.
-3. **Embeddings & Vector DB:** Use `OpenAIEmbeddings` to embed documents and store them in a [Chroma](https://www.trychroma.com/) vector database.
-4. **Retriever:** Convert the vector DB into a retriever for similarity search.
-5. **LLM:** Use OpenAI's GPT model via `ChatOpenAI`.
-6. **Retrieval QA Pipeline:** Combine retriever and LLM using `RetrievalQA` to answer questions with context.
+Deliberately, to stay readable:
 
+- Document chunking, so each "document" is one short string.
+- Persistence: the index is rebuilt on every run.
+- Any real corpus, ingestion, or an API around it.
+- Evaluation, tests, error handling, auth, deployment.
 
-**File:** [`rag_pipeline_with_openapi.py`](./rag_pipeline_with_openapi.py)
+The fuller version of this idea, built as an actual RAG service, is [smart-system](https://github.com/usman250994/smart-system). Start there if you want something closer to production, and here if you want to see the moving parts with nothing hidden.
 
-**Read more:** [My First Micro LLM in Python: Build a Mini RAG System in Minutes (Medium)](https://mani9418.medium.com/my-first-micro-llm-in-python-build-a-mini-rag-system-in-minutes-582ba6dc0931)
-
----
-
-## 🚀 Approach 2: Build Your Own RAG Pipeline (No OpenAI, 100% Free!)
-
-
-
-You can also build a Retrieval-Augmented Generation (RAG) system **without any paid APIs**! Instead of OpenAI, we use:
-
-- 🧠 **Custom Classifier**: A simple neural network (MLP) for sentiment classification.
-- 🆓 **Free Embeddings**: [SentenceTransformers](https://www.sbert.net/) for text embeddings.
-- 🗃️ **Free Vector DB**: [FAISS](https://faiss.ai/) for fast similarity search.
-
-See [`locally_trained_model_for_rag pipeline.py`](./locally_trained_model_for_rag%20pipeline.py) for the full code.
-
-**Key Steps:**
-
-1. **Prepare Data:** Use a sample dataset (e.g., movie reviews) and assign labels.
-2. **Train Classifier:** Use [scikit-learn](https://scikit-learn.org/) to train a neural network classifier (MLP) on your data.
-3. **Embed Documents:** Use [SentenceTransformers](https://www.sbert.net/) to embed your documents.
-4. **Vector Search:** Store embeddings in a [FAISS](https://faiss.ai/) vector database for fast similarity search.
-5. **Query Flow:**
-	- Embed the user query
-	- Retrieve similar docs from FAISS
-	- Classify the retrieved docs using your trained classifier
-	- Return the results with predicted labels
-
-
-**File:** [`locally_trained_model_for_rag pipeline.py`](./locally_trained_model_for_rag%20pipeline.py)
-
-**Read more:** [Learning RAG the Local Way: Build a Free In-Memory Retriever + Classifier (Medium)](https://mani9418.medium.com/learning-rag-the-local-way-build-a-free-in-memory-retriever-classifier-212824765ff2)
-
-**Why use this?**
-
-- No API keys or paid services needed
-- Fast, runs locally on your machine
-- Great for learning and prototyping
-
----
-
-
-## How to Run
-1. Clone this repository.
-2. Install dependencies:
-	 ```sh
-	 pip install -r requirements.txt
-	 ```
-3. Create a `.env` file with your OpenAI API key:
-	 ```env
-	 OPENAI_API_KEY=your_openai_key_here
-	 ```
-4. Run the script:
-	 ```sh
-   python rag_pipeline_with_openapi.py
-	 ```
-
----
-
-## Future Possibilities
-
-- **S3 for Document Storage:**
-	- Store and load large document dumps from AWS S3 buckets for scalable data ingestion.
-- **Document Chunking:**
-	- Split large documents into smaller, manageable chunks for better retrieval and context handling.
-- **AWS Lambda Functions:**
-	- Wrap this logic in Python or Go Lambda functions for serverless, scalable deployments on AWS.
-- **Vector DB in DynamoDB:**
-	- Store vector embeddings in DynamoDB for persistent, cloud-native vector search.
-
----
+Background posts: [the OpenAI version](https://mani9418.medium.com/my-first-micro-llm-in-python-build-a-mini-rag-system-in-minutes-582ba6dc0931) and [the local version](https://mani9418.medium.com/learning-rag-the-local-way-build-a-free-in-memory-retriever-classifier-212824765ff2) on Medium.
 
 ## License
-See [LICENSE](LICENSE) for details.
+
+See [LICENSE](LICENSE).
+
+---
+
+Built by Usman Ali Siddiqui · [maanizstudio.com](https://www.maanizstudio.com)
